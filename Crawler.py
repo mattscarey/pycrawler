@@ -1,27 +1,28 @@
 __author__ = 'Matthew'
 
 import urllib2
-import sys
-import os
 
-dir = os.path.dirname(__file__)
-DATA = os.path.join(dir, 'matrix5.4M.csv')
-LOGS = os.path.join(dir, 'results/')
-
+from Utilities import *
 from random import randint
 #from timeout import timeout
 from datetime import datetime, date
+import TextData
+import sys
+import os
 
 class Crawler:
 
-    def __init__(self, start, startNum):
-        self.startNum = startNum
-        self.root = os.path.dirname(__file__)
-        self.log = self.root + 'log.txt'
-        self.start = start
-        self.count = 0
+    def __init__(self, start):
+        self.root = os.path.dirname(os.path.abspath(__file__)) + "/"
+        self.log = self.root + 'log.txt' #this will need to be relative.
+        self.command = self.root + 'command.txt'
+        self.response = self.root + 'response.txt'
+        self.Data = TextData.Data(self.root + "data.txt")
+        self.state = {}
+        self.state["start"] = start
+        self.state["count"] = 0
         self.pool = set([])
-        self.visited = []
+        self.state["visited"] = []
         self.snapshots = []
         self.running = True
         self.startCrawler()
@@ -32,7 +33,7 @@ class Crawler:
         return ret
 
     def printLog(self, count, url):
-        self.snapshots.append(self.getRootLink(url))
+        self.snapshots.append(getRootLink(url))
         with open(self.log, "w") as f:
             f.write(str(count) + "\n")
             f.write("\n")
@@ -61,12 +62,51 @@ class Crawler:
         html = urllib2.urlopen(link, None, 5).read()
         return html
 
-    def specialCases(self, link): #Put special cases here
-        # if "/wiki/" == link[:6]: #Example
-        #     return True
-        # else:
-        #     return False
-        return True
+    def specialCases(self, link):
+        if "/wiki/" == link[:6]:
+            return True
+        else:
+            return False
+
+    def checkCommand(self):
+        command = ""
+        with open(self.command, "r") as f:
+            for line in f:
+                command += line
+        if command != "":
+            with open(self.command, "w") as f:
+                f.write("")
+            if command == "stop":
+                self.writeResponse("\n\n")
+                self.writeResponse("stopping crawler")
+                self.running = False
+            elif command == "write":
+                self.writeResponse("\n\n")
+                self.writeResponse("writing data...")
+                self.Data.dump()
+            elif command == "status":
+                self.writeResponse("\n\n")
+                self.writeResponse("Total sites visited: " + str(self.state["count"]))
+                self.writeResponse("Last visited: " + str(self.state["visited"][len(self.state["visited"]) - 1]))
+                now = datetime.now().time()
+                total = datetime.combine(date.today(), now) - \
+                        datetime.combine(date.today(), self.state["startTime"])
+                self.writeResponse("Elapsed time: " + str(total))
+            elif command == "status-all":
+                self.writeResponse("\n\n")
+                self.writeResponse("Total sites visited: " + str(self.state["count"]))
+                self.writeResponse("Last visited: " + str(self.state["visited"][len(self.state["visited"]) - 1]))
+                now = datetime.now().time()
+                total = datetime.combine(date.today(), now) - \
+                    datetime.combine(date.today(), self.state["startTime"])
+                self.writeResponse("Elapsed time: " + str(total))
+                self.writeResponse("Start site: " + self.state["start"])
+                self.writeResponse("Start Time: " + str(self.state["startTime"]))
+                self.writeResponse("Pool Size: " + str(len(self.pool)))
+                self.writeResponse("Total Visits: " + str(len(self.state["visited"])))
+            else:
+                self.writeResponse("Invalid Command")
+
 
     def sanitize(self, new, old):
         if not self.specialCases(new):
@@ -77,7 +117,7 @@ class Crawler:
             elif new[:4] == "http":
                 return new
             elif new[0] == "/" and old != None and old != "":
-                return self.getRootLink(old) + new
+                return getRootLink(old) + new
             elif new[:3] == "www":
                 return "http://" + new
             elif new[:3] == "../":
@@ -108,7 +148,7 @@ class Crawler:
             while not found and links != []:
                 rand = randint(0,len(links) - 1)
                 temp = links[rand]
-                if temp not in self.visited:
+                if temp not in self.state["visited"]:
                     ret = temp
                     found = True
                 else:
@@ -117,31 +157,31 @@ class Crawler:
                 ret = self.getRandomFromPool()
             return ret
         else:
+            #print("backtracking. links left: " + str(len(self.pool)))
             return self.getRandomFromPool()
 
-    def doStuff(self, HTML, currLink):
-        #Whatever side effects you want the crawler to do.
-        pass
 
     def startCrawler(self):
-        self.startTime = datetime.now().time()
-        curr = self.start
+        self.state["startTime"] = datetime.now().time()
+        curr = self.state["start"]
         raw = urllib2.urlopen(curr).read()
         links = self.getLinks(raw, curr)
         failures = 0
 
-        while self.count < self.startNum:
+        while self.running:
+            self.checkCommand()
+            old = curr
             curr = self.getRandomLink(links)
             try:
-                self.visited.append(curr)
+                self.state["visited"].append(curr)
                 if True:
                     raw = self.getText(curr)
                     links = self.getLinks(raw, curr)
                     print(curr)
-                    self.doStuff(raw, curr)
-                    self.count += 1
-                    if self.count % 50 == 0:
-                        self.printLog(self.count, curr)
+                    self.Data.getData(raw)
+                    self.state["count"] += 1
+                    if self.state["count"] % 50 == 0:
+                        self.printLog(self.state["count"], curr)
 
                 else:
                     if len(links) >= 1:
@@ -160,11 +200,11 @@ class Crawler:
                 curr = self.getRandomFromPool()
                 failures = 0
         end = datetime.now().time()
-        total = datetime.combine(date.today(), end) - \
-                datetime.combine(date.today(), self.startTime)
+        total = datetime.combine(date.today(), end) - datetime.combine(date.today(), self.state["startTime"])
+        self.Data.end()
         with open(self.log, "a") as f:
             f.write("Total time: " + str(total) + "\n")
         print("done!")
 
 if __name__ == "__main__":
-    crawler = Crawler("http://www.iub.edu", 10) #start link
+    crawler = Crawler("https://en.wikipedia.org/wiki/Constantinople")
