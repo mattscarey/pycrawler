@@ -14,11 +14,10 @@ from datetime import datetime, date
 
 class Crawler:
 
-    def __init__(self, start):
+    def __init__(self, start, startNum):
+        self.startNum = startNum
         self.root = os.path.dirname(__file__)
-        self.log = self.root + 'log.txt' #this will need to be relative.
-        self.command = self.root + 'command.txt'
-        self.response = self.root + 'response.txt'
+        self.log = self.root + 'log.txt'
         self.start = start
         self.count = 0
         self.pool = set([])
@@ -120,6 +119,9 @@ class Crawler:
         else:
             return self.getRandomFromPool()
 
+    def doStuff(self, HTML, currLink):
+        #Whatever side effects you want the crawler to do.
+        pass
 
     def startCrawler(self):
         self.startTime = datetime.now().time()
@@ -128,7 +130,7 @@ class Crawler:
         links = self.getLinks(raw, curr)
         failures = 0
 
-        while self.running:
+        while self.count < self.startNum:
             curr = self.getRandomLink(links)
             try:
                 self.visited.append(curr)
@@ -136,6 +138,7 @@ class Crawler:
                     raw = self.getText(curr)
                     links = self.getLinks(raw, curr)
                     print(curr)
+                    self.doStuff(raw, curr)
                     self.count += 1
                     if self.count % 50 == 0:
                         self.printLog(self.count, curr)
@@ -164,4 +167,4 @@ class Crawler:
         print("done!")
 
 if __name__ == "__main__":
-    crawler = Crawler("http://www.iub.edu") #start link
+    crawler = Crawler("http://www.iub.edu", 10) #start link
