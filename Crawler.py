@@ -5,9 +5,6 @@ import sys
 import os
 
 dir = os.path.dirname(__file__)
-DATA = os.path.join(dir, 'matrix5.4M.csv')
-LOGS = os.path.join(dir, 'results/')
-
 from random import randint
 #from timeout import timeout
 from datetime import datetime, date
